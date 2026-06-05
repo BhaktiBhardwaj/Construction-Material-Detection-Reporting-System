@@ -1,0 +1,40 @@
+============================================================
+CONSTRUCTION MATERIAL REPORT
+Generated: 02-06-2026 19:09:59
+============================================================
+
+Aggregate Pile #1
+  Size : Large
+
+Aggregate Pile #2
+  Size : Large
+
+Aggregate Pile #3
+  Size : Medium
+
+Aggregate Pile #4
+  Size : Medium
+
+Aggregate Pile #5
+  Size : Medium
+
+Sand Pile #1
+  Size : Medium
+
+Sand Pile #2
+  Size : Small
+
+Sand Pile #3
+  Size : Large
+
+Sand Pile #4
+  Size : Large
+
+Sand Pile #5
+  Size : Large
+
+Cement Bags    : 13
+Rebar Bundles  : 4
+Bitumen Drums  : 10
+
+============================================================
