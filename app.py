@@ -5,6 +5,8 @@ from collections import Counter
 from datetime import datetime
 import pandas as pd
 import tempfile
+import plotly.express as px
+
 
 # PAGE CONFIG
 st.set_page_config(
@@ -14,8 +16,8 @@ st.set_page_config(
 )
 
 
-st.title("🏗️ Construction Material Detection & Reporting System")
-st.markdown("AI-powered construction site monitoring using YOLOv8")
+st.title("🏗️ SiteVision AI")
+st.caption("AI-Powered Construction Material Detection & Inventory Analytics")
 
 # Sidebar
 with st.sidebar:
@@ -68,6 +70,7 @@ def load_model():
 
 
 model = load_model()
+
 
 # PILE SIZE FUNCTION
 def get_pile_size(area):
@@ -184,10 +187,15 @@ if uploaded_files:
 
                         sand_num += 1
 
+                    confidence = round(
+                    float(box.conf[0]) * 100,2
+                )
+
                     pile_data.append({
                         "Material": material_name,
                         "Area": int(area),
-                        "Estimated Size": size
+                        "Estimated Size": size,
+                        "Confidence (%)": confidence
                     })
 
         st.subheader("🎯 Detection Results")
@@ -203,6 +211,7 @@ if uploaded_files:
                     caption=f"Detected: {filename}",
                     use_container_width=True
                 )
+
 
         # SIDEBAR LIVE STATISTICS
         st.sidebar.markdown("---")
@@ -237,7 +246,6 @@ if uploaded_files:
             "Bitumen Drums",
             total_counts.get("bitumen_drums", 0)
         )
-
 
         # METRICS
         st.subheader("📊 Site Summary")
@@ -274,7 +282,7 @@ if uploaded_files:
             total_counts.get("bitumen_drums", 0)
         )
 
-       
+
         # INVENTORY TABLE
         st.subheader("📦 Material Inventory")
 
@@ -304,6 +312,43 @@ if uploaded_files:
             use_container_width=True
         )
 
+        csv_data = inventory_df.to_csv(
+            index=False
+        )
+
+        st.download_button(
+            label="⬇ Download Inventory CSV",
+            data=csv_data,
+            file_name="inventory_report.csv",
+            mime="text/csv"
+        )
+
+        st.subheader("⚙️ Material Distribution")
+
+        fig_pie = px.pie(
+            inventory_df,
+            values="Count",
+            names="Material"
+        )
+
+        st.plotly_chart(
+            fig_pie,
+            use_container_width=True
+        )
+
+        st.subheader("📊 Material Count Analysis")
+
+        fig_bar = px.bar(
+            inventory_df,
+            x="Material",
+            y="Count"
+        )
+
+        st.plotly_chart(
+            fig_bar,
+            use_container_width=True
+        )
+
         # PILE SIZE TABLE
         st.subheader("📏 Pile Size Estimation")
 
@@ -317,6 +362,7 @@ if uploaded_files:
                 pile_df,
                 use_container_width=True
             )
+        
         
         # REPORT GENERATION
         report = []
@@ -373,3 +419,8 @@ if uploaded_files:
         mime="text/plain",
         key="download_report"
     )
+        
+st.markdown("---")
+st.caption(
+    "Developed by Bhakti Bhardwaj | YOLOv8 • Streamlit • Computer Vision"
+)  
