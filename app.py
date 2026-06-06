@@ -6,35 +6,70 @@ from datetime import datetime
 import pandas as pd
 import tempfile
 
-
-# -------------------------------
 # PAGE CONFIG
-# -------------------------------
 st.set_page_config(
     page_title="Construction Material Detection",
     page_icon="🏗️",
     layout="wide"
 )
-st.write("Step 1")
+
 
 st.title("🏗️ Construction Material Detection & Reporting System")
 st.markdown("AI-powered construction site monitoring using YOLOv8")
 
-st.write("Step 2")
-# -------------------------------
+# Sidebar
+with st.sidebar:
+
+    st.markdown("# 🏗️ SiteVision AI")
+
+    st.markdown("---")
+
+    st.markdown("""
+    ### 📋 Project Details
+
+    **Model:** YOLOv8
+
+    **Framework:** Streamlit
+
+    **Classes:** 5 Construction Materials
+
+    **Detection Type:** Object Detection
+
+    **Reporting:** Automated Site Reports
+    """)
+
+    st.markdown("---")
+
+    st.markdown("""
+    ### 🔍 Detectable Materials
+
+    ✅ Sand Piles
+
+    ✅ Aggregate Piles
+
+    ✅ Cement Bags
+
+    ✅ Rebar Bundles
+
+    ✅ Bitumen Drums
+    """)
+
+    st.markdown("---")
+
+    st.info(
+        "Upload one or multiple site images and generate a combined material inventory report."
+    )
+
+
 # LOAD MODEL
-# -------------------------------
 @st.cache_resource
 def load_model():
     return YOLO("model/best.pt")
 
 
 model = load_model()
-st.write("Step 3")
 
-# -------------------------------
 # PILE SIZE FUNCTION
-# -------------------------------
 def get_pile_size(area):
 
 
@@ -46,61 +81,202 @@ def get_pile_size(area):
         return "Large"
 
 
-# -------------------------------
 # FILE UPLOAD
-# -------------------------------
-st.write("Step 4")
-
-uploaded_file = st.file_uploader(
-    "Upload Construction Site Image",
-    type=["jpg", "jpeg", "png"]
+uploaded_files = st.file_uploader(
+    "Upload Construction Site Images",
+    type=["jpg", "jpeg", "png"],
+    accept_multiple_files=True
 )
 
 st.write("Uploader loaded")
 
-if uploaded_file:
+if uploaded_files:
 
-    image = Image.open(uploaded_file)
+    st.subheader("📷 Uploaded Images")
 
-    st.image(image, use_container_width=True)
+    cols = st.columns(3)
 
-    if st.button("🔍 Detect Materials", key="detect_btn"):
+    for i, uploaded_file in enumerate(uploaded_files):
 
-        model = load_model()
+        image = Image.open(uploaded_file)
 
-        st.success("Model Loaded")
+        with cols[i % 3]:
+            st.image(
+                image,
+                caption=uploaded_file.name,
+                use_container_width=True
+            )
 
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
-            image.save(tmp.name)
-            image_path = tmp.name
+    if st.button("🔍 Analyze Site"):
 
-        results = model.predict(
-            source=image_path,
-            conf=0.4,
-            save=False
+        total_counts = Counter()
+        pile_data = []
+        annotated_images = []
+
+        aggregate_num = 1
+        sand_num = 1
+
+        for uploaded_file in uploaded_files:
+
+            image = Image.open(uploaded_file)
+
+            with tempfile.NamedTemporaryFile(
+                delete=False,
+                suffix=".jpg"
+            ) as tmp:
+
+                image.save(tmp.name)
+
+                results = model.predict(
+                    source=tmp.name,
+                    conf=0.4,
+                    save=False
+                )
+
+                annotated_img = results[0].plot()
+
+                annotated_images.append(
+                    (
+                        uploaded_file.name,
+                        annotated_img
+                    )
+                )
+
+            for r in results:
+
+                # Material Counting
+                for cls in r.boxes.cls:
+                    total_counts[r.names[int(cls)]] += 1
+
+                # Pile Size Estimation
+                for box in r.boxes:
+
+                    cls = int(box.cls[0])
+                    class_name = r.names[cls]
+
+                    if class_name not in [
+                        "aggregate_pile",
+                        "sand_pile"
+                    ]:
+                        continue
+
+                    x1, y1, x2, y2 = box.xyxy[0]
+
+                    area = float(
+                        (x2 - x1) * (y2 - y1)
+                    )
+
+                    size = get_pile_size(area)
+
+                    if class_name == "aggregate_pile":
+
+                        material_name = (
+                            f"Aggregate Pile #{aggregate_num}"
+                        )
+
+                        aggregate_num += 1
+
+                    else:
+
+                        material_name = (
+                            f"Sand Pile #{sand_num}"
+                        )
+
+                        sand_num += 1
+
+                    pile_data.append({
+                        "Material": material_name,
+                        "Area": int(area),
+                        "Estimated Size": size
+                    })
+
+        st.subheader("🎯 Detection Results")
+
+        cols = st.columns(3)
+
+        for i, (filename, img) in enumerate(annotated_images):
+
+            with cols[i % 3]:
+
+                st.image(
+                    img,
+                    caption=f"Detected: {filename}",
+                    use_container_width=True
+                )
+
+        # SIDEBAR LIVE STATISTICS
+        st.sidebar.markdown("---")
+        st.sidebar.subheader("📊 Detection Summary")
+
+        st.sidebar.metric(
+            "Total Materials",
+            sum(total_counts.values())
         )
 
-        st.success("Prediction Complete")
-
-        detected_img = results[0].plot()
-
-        st.image(
-            detected_img,
-            caption="Detection Results",
-            use_container_width=True
+        st.sidebar.metric(
+            "Sand Piles",
+            total_counts.get("sand_pile", 0)
         )
 
-        from collections import Counter
+        st.sidebar.metric(
+            "Aggregate Piles",
+            total_counts.get("aggregate_pile", 0)
+        )
 
-        counts = Counter()
+        st.sidebar.metric(
+            "Cement Bags",
+            total_counts.get("cement_bags", 0)
+        )
 
-        for r in results:
-            for cls in r.boxes.cls:
-                counts[r.names[int(cls)]] += 1
+        st.sidebar.metric(
+            "Rebar Bundles",
+            total_counts.get("rebar_bundle", 0)
+        )
 
+        st.sidebar.metric(
+            "Bitumen Drums",
+            total_counts.get("bitumen_drums", 0)
+        )
+
+
+        # METRICS
+        st.subheader("📊 Site Summary")
+
+        col1, col2, col3, col4, col5, col6 = st.columns(6)
+
+        col1.metric(
+            "Total Materials",
+            sum(total_counts.values())
+        )
+
+        col2.metric(
+            "Sand Piles",
+            total_counts.get("sand_pile", 0)
+        )
+
+        col3.metric(
+            "Aggregate Piles",
+            total_counts.get("aggregate_pile", 0)
+        )
+
+        col4.metric(
+            "Cement Bags",
+            total_counts.get("cement_bags", 0)
+        )
+
+        col5.metric(
+            "Rebar Bundles",
+            total_counts.get("rebar_bundle", 0)
+        )
+
+        col6.metric(
+            "Bitumen Drums",
+            total_counts.get("bitumen_drums", 0)
+        )
+
+       
+        # INVENTORY TABLE
         st.subheader("📦 Material Inventory")
-
-        inventory_data = []
 
         materials = [
             "aggregate_pile",
@@ -110,67 +286,39 @@ if uploaded_file:
             "bitumen_drums"
         ]
 
+        inventory_data = []
+
         for material in materials:
+
             inventory_data.append({
                 "Material": material.replace("_", " ").title(),
-                "Count": counts.get(material, 0)
+                "Count": total_counts.get(material, 0)
             })
 
-        inventory_df = pd.DataFrame(inventory_data)
+        inventory_df = pd.DataFrame(
+            inventory_data
+        )
 
         st.dataframe(
             inventory_df,
             use_container_width=True
         )
 
+        # PILE SIZE TABLE
         st.subheader("📏 Pile Size Estimation")
 
-        pile_data = []
-
-        aggregate_num = 1
-        sand_num = 1
-
-        for r in results:
-
-            for box in r.boxes:
-
-                cls = int(box.cls[0])
-                class_name = r.names[cls]
-
-                if class_name not in [
-                    "aggregate_pile",
-                    "sand_pile"
-                ]:
-                    continue
-
-                x1, y1, x2, y2 = box.xyxy[0]
-
-                area = float((x2 - x1) * (y2 - y1))
-
-                size = get_pile_size(area)
-
-                if class_name == "aggregate_pile":
-                    material_name = f"Aggregate Pile #{aggregate_num}"
-                    aggregate_num += 1
-                else:
-                    material_name = f"Sand Pile #{sand_num}"
-                    sand_num += 1
-
-                pile_data.append({
-                    "Material": material_name,
-                    "Area": int(area),
-                    "Estimated Size": size
-                })
-
         if pile_data:
-            pile_df = pd.DataFrame(pile_data)
+
+            pile_df = pd.DataFrame(
+                pile_data
+            )
+
             st.dataframe(
                 pile_df,
                 use_container_width=True
             )
         
-        st.subheader("📄 Material Report")
-
+        # REPORT GENERATION
         report = []
 
         report.append("=" * 60)
@@ -181,25 +329,27 @@ if uploaded_file:
         report.append("=" * 60)
         report.append("")
 
-        # Inventory Summary
         report.append("MATERIAL COUNTS")
         report.append("-" * 30)
 
         for material in materials:
+
             report.append(
-                f"{material.replace('_',' ').title()}: {counts.get(material,0)}"
+                f"{material.replace('_',' ').title()}: "
+                f"{total_counts.get(material,0)}"
             )
 
         report.append("")
 
-        # Pile Summary
         report.append("PILE SIZE ESTIMATION")
         report.append("-" * 30)
 
         for item in pile_data:
+
             report.append(
-                f"{item['Material']} -> {item['Estimated Size']} "
-                f"(Area: {item['Area']})"
+                f"{item['Material']} | "
+                f"{item['Estimated Size']} | "
+                f"Area: {item['Area']}"
             )
 
         report.append("")
@@ -207,12 +357,15 @@ if uploaded_file:
 
         final_report = "\n".join(report)
 
+        st.subheader("📄 Material Report")
+
         st.text_area(
             "Generated Report",
             final_report,
             height=350
         )
 
+        
         st.download_button(
         label="⬇ Download Report",
         data=final_report,
