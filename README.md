@@ -108,6 +108,7 @@ Overall testing accuracy: **~90%**
 - Pandas
 - Pillow
 - Streamlit
+- plotly
 
 ---
 
